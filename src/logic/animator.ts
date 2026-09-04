@@ -20,6 +20,7 @@ export {
   BENCH_A,
   BENCH_B,
 } from './tactics'
+export { liberoCoverFor, liberoSwapBetween, liberoCoverageTable } from './rotation'
 
 export function step(s: Store, st: AnimState): void {
   const mode = s.mode

@@ -1,4 +1,4 @@
-import { useRef, useMemo } from 'react'
+import { useRef, useMemo, useEffect } from 'react'
 import { useFrame } from '@react-three/fiber'
 import * as THREE from 'three'
 
@@ -20,6 +20,15 @@ const padMat = new THREE.MeshStandardMaterial({ color: '#1b2431', roughness: 0.8
 const sockMat = new THREE.MeshStandardMaterial({ color: '#eef1f5', roughness: 0.9 })
 
 const skinToneVariants = ['#d9a17a', '#c98d62', '#a9794f', '#e5b78d', '#8c5a3b', '#bf8a63']
+
+const hairVariants = [
+  { color: '#241a12', style: 'short' },
+  { color: '#16181c', style: 'spiky' },
+  { color: '#4a2f1d', style: 'short' },
+  { color: '#c9a24b', style: 'bun' },
+  { color: '#7d3b1d', style: 'buzz' },
+  { color: '#2c2622', style: 'short' },
+]
 
 // -------------------- shared geometry cache --------------------
 const geoCache = new Map()
@@ -98,7 +107,27 @@ function pickSkin(number) {
   return skinToneVariants[((h % skinToneVariants.length) + skinToneVariants.length) % skinToneVariants.length]
 }
 
-export function Humanoid({ position, facing = 0, jerseyColor, pose, isLibero, scale = 1, number = '7' }) {
+function pickHair(number) {
+  const s = String(number || '0')
+  const h = (s.charCodeAt(0) || 0) + (s.charCodeAt(1) || 0) * 7
+  return hairVariants[((h % hairVariants.length) + hairVariants.length) % hairVariants.length]
+}
+
+// Per-role physiques: middles are the tall broad blockers, setters compact and
+// lean, the libero the shortest/most defensive build.
+const BUILD_BY_ROLE = {
+  MB1: { height: 1.07, girth: 1.1, shoulder: 1.1 },
+  MB2: { height: 1.07, girth: 1.1, shoulder: 1.1 },
+  OPP: { height: 1.04, girth: 1.06, shoulder: 1.06 },
+  OH1: { height: 1.0, girth: 1.0, shoulder: 1.0 },
+  OH2: { height: 1.0, girth: 1.0, shoulder: 1.0 },
+  S: { height: 0.98, girth: 0.96, shoulder: 0.96 },
+  S1: { height: 0.98, girth: 0.96, shoulder: 0.96 },
+  S2: { height: 0.98, girth: 0.96, shoulder: 0.96 },
+  L: { height: 0.95, girth: 0.92, shoulder: 0.92 },
+}
+
+export function Humanoid({ position, facing = 0, jerseyColor, pose, isLibero, scale = 1, number = '7', role = '' }) {
   const root = useRef()
   const body = useRef()
   const pelvis = useRef()
@@ -120,6 +149,8 @@ export function Humanoid({ position, facing = 0, jerseyColor, pose, isLibero, sc
   const ankleR = useRef()
 
   const skinVariant = useMemo(() => pickSkin(number), [number])
+  const hair = useMemo(() => pickHair(number), [number])
+  const build = useMemo(() => BUILD_BY_ROLE[role] || { height: 1, girth: 1, shoulder: 1 }, [role])
   const legSkin = useMemo(() => {
     const m = jerseyMat.clone()
     m.color.set(skinVariant)
@@ -134,7 +165,18 @@ export function Humanoid({ position, facing = 0, jerseyColor, pose, isLibero, sc
     return m
   }, [jerseyColor, isLibero])
 
+  const hairMatLocal = useMemo(() => {
+    const m = hairMat.clone()
+    m.color.set(hair.color)
+    return m
+  }, [hair])
+
   const numTex = useMemo(() => numberTexture(number), [number])
+
+  // Let every limb cast a shadow onto the court for a grounded look.
+  useEffect(() => {
+    if (root.current) root.current.traverse((o) => { if (o.isMesh) o.castShadow = true })
+  }, [])
 
   useFrame((state) => {
     const t = state.clock.elapsedTime
@@ -190,13 +232,16 @@ export function Humanoid({ position, facing = 0, jerseyColor, pose, isLibero, sc
   })
 
   const scl = scale
+  const gW = build.girth
+  const gH = build.height
+  const sh = build.shoulder
   const L = limbProfiles
 
   const leg = (side) => {
     const hipRef = side === 'L' ? hipL : hipR
     const kneeRef = side === 'L' ? kneeL : kneeR
     const ankleRef = side === 'L' ? ankleL : ankleR
-    const hipX = side === 'L' ? -0.1 : 0.1
+    const hipX = (side === 'L' ? -0.1 : 0.1) * sh
     const sideSign = side === 'L' ? -1 : 1
     return (
       <group ref={hipRef} position={[hipX, 1.0, 0]}>
@@ -232,7 +277,7 @@ export function Humanoid({ position, facing = 0, jerseyColor, pose, isLibero, sc
     const shoulder = side === 'L' ? armL : armR
     const elbRef = side === 'L' ? elbL : elbR
     const wristRef = side === 'L' ? wristL : wristR
-    const shX = side === 'L' ? -0.21 : 0.21
+    const shX = (side === 'L' ? -0.21 : 0.21) * sh
     const sideSign = side === 'L' ? -1 : 1
     return (
       <group ref={shoulder} position={[shX, 0.28, 0]}>
@@ -260,7 +305,7 @@ export function Humanoid({ position, facing = 0, jerseyColor, pose, isLibero, sc
 
   return (
     <group ref={root}>
-      <group ref={body} scale={[scl, scl, scl]}>
+      <group ref={body} scale={[scl * gW, scl * gH, scl * gW]}>
         {leg('L')}
         {leg('R')}
 
@@ -276,11 +321,18 @@ export function Humanoid({ position, facing = 0, jerseyColor, pose, isLibero, sc
                 <planeGeometry args={[0.3, 0.3]} />
                 <meshBasicMaterial map={numTex} transparent depthWrite={false} />
               </mesh>
+              {/* small chest number on the front */}
+              <mesh position={[0, 0.32, 0.135]} rotation={[0, 0, 0]} scale={0.55}>
+                <planeGeometry args={[0.3, 0.3]} />
+                <meshBasicMaterial map={numTex} transparent depthWrite={false} />
+              </mesh>
               {/* neck */}
               <group ref={neck} position={[0, 0.47, 0]}>
                 <mesh geometry={lathe(L.neck)} material={legSkin} />
+                {/* jersey collar */}
+                <mesh geometry={cyl(0.052, 0.056, 0.05, 12)} material={mat} position={[0, 0.02, 0]} />
                 <group ref={head} position={[0, 0.14, 0]}>
-                  {headFace(legSkin)}
+                  {headFace(legSkin, hairMatLocal, hair.style)}
                 </group>
               </group>
               {/* shoulders + arms outside the neck */}
@@ -294,7 +346,8 @@ export function Humanoid({ position, facing = 0, jerseyColor, pose, isLibero, sc
   )
 }
 
-function headFace(skinMatLocal) {
+function headFace(skinMatLocal, hairMatLocal, hairStyle = 'short') {
+  const crown = 0.05 + (hairStyle === 'spiky' ? 0.025 : 0)
   return (
     <>
       {/* skull */}
@@ -306,15 +359,28 @@ function headFace(skinMatLocal) {
         <mesh key={s} geometry={sph(0.024, 8, 6)} material={skinMatLocal} position={[s * 0.115, -0.005, 0]} />
       ))}
       {/* hair */}
-      <mesh geometry={sph(0.126, 18, 14)} material={hairMat} scale={[1.02, 0.78, 1.02]} position={[0, 0.05, 0]} />
-      <mesh geometry={sph(0.05, 10, 8)} material={hairMat} position={[0, 0.095, -0.03]} />
+      <mesh geometry={sph(0.126, 18, 14)} material={hairMatLocal} scale={[1.02, 0.78, 1.02]} position={[0, crown, 0]} />
+      <mesh geometry={sph(0.05, 10, 8)} material={hairMatLocal} position={[0, 0.095, -0.03]} />
+      {hairStyle === 'spiky' && (
+        <>
+          {[[-0.05, 0.02], [0, 0.05], [0.05, 0.02]].map(([x, z], i) => (
+            <mesh key={i} geometry={sph(0.026, 8, 6)} material={hairMatLocal} position={[x, 0.135, z]} scale={[0.8, 1.35, 0.8]} />
+          ))}
+        </>
+      )}
+      {hairStyle === 'bun' && (
+        <mesh geometry={sph(0.042, 10, 8)} material={hairMatLocal} position={[0, 0.1, -0.065]} />
+      )}
+      {hairStyle === 'buzz' && (
+        <mesh geometry={sph(0.128, 16, 12)} material={hairMatLocal} scale={[1.03, 0.5, 1.03]} position={[0, 0.045, 0]} />
+      )}
       {/* eyes */}
       {[-1, 1].map((s) => (
         <mesh key={`e${s}`} geometry={sph(0.013, 8, 6)} material={eyeMat} position={[s * 0.046, 0.012, 0.105]} />
       ))}
       {/* brow */}
       {[-1, 1].map((s) => (
-        <mesh key={`br${s}`} geometry={box(0.035, 0.009, 0.008)} material={hairMat} position={[s * 0.046, 0.04, 0.108]} />
+        <mesh key={`br${s}`} geometry={box(0.035, 0.009, 0.008)} material={hairMatLocal} position={[s * 0.046, 0.04, 0.108]} />
       ))}
       {/* nose */}
       <mesh geometry={sph(0.016, 8, 6)} material={skinMatLocal} scale={[0.7, 1.1, 0.9]} position={[0, -0.018, 0.112]} />

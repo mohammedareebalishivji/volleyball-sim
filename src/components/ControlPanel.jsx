@@ -1,17 +1,19 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useStore } from '../store'
 import {
   SIGNALS, SERVE_TYPES, SERVE_TARGETS, RECEIVE_TARGETS, CAMERA_PRESETS, SPIKE_TARGETS,
-  COMBO_ZONES, BLOCK_PATTERNS, BLOCK_COLOR, NET_HEIGHTS, COURT_GRID,
+  COMBO_ZONES, BLOCK_PATTERNS, BLOCK_COLOR, NET_HEIGHTS, COURT_GRID, LIBERO_COLOR,
 } from '../constants'
-import { buildLineup, activeSetter } from '../logic/rotation'
+import { buildLineup, activeSetter, liberoCoverFor, liberoSwapBetween } from '../logic/rotation'
 import { jumpSpot, approachStart, setterSpot, customSignal, blockSpots } from '../logic/animator'
+import { RotationChart } from './RotationChart'
 
 const ROT_NAMES = ['Rotation 1', 'Rotation 2', 'Rotation 3', 'Rotation 4', 'Rotation 5', 'Rotation 6']
 
 const TABS = [
   { id: 'rally', label: 'Rally' },
   { id: 'serve', label: 'Serve · Receive' },
+  { id: 'rotation', label: 'Rotation' },
   { id: 'options', label: 'Settings' },
 ]
 
@@ -229,6 +231,8 @@ function RangeField({ label, value, min, max, step, lo, hi, onChange }) {
 export function ControlPanel() {
   const s = useStore()
   const [tab, setTab] = useState('rally')
+  const [swapMsg, setSwapMsg] = useState(null)
+  const swapTimer = useRef(null)
 
   const lineup = buildLineup(s.system, s.rotation)
   const setter = activeSetter(s.system, lineup)
@@ -244,6 +248,21 @@ export function ControlPanel() {
   const setPlayType = (kind) => {
     s.setCustomCombo({ enabled: kind === 'combo' })
     s.setDrill({ enabled: kind === 'drill' })
+  }
+
+  // Rotate with a live libero-swap callout: if the middle the libero covers
+  // changes across the rotation, surface a short-lived "L ⇄ MBx" notice.
+  const rotateAndNote = (dir) => {
+    const cur = buildLineup(s.system, s.rotation)
+    const nextRot = ((s.rotation + dir) % 6 + 6) % 6
+    s.rotate(dir)
+    const next = buildLineup(s.system, nextRot)
+    const swap = liberoSwapBetween(cur, next)
+    if (swap) {
+      setSwapMsg(`L ${swap}`)
+      window.clearTimeout(swapTimer.current)
+      swapTimer.current = window.setTimeout(() => setSwapMsg(null), 2400)
+    }
   }
 
   const applyQuick = (q) => {
@@ -302,20 +321,35 @@ export function ControlPanel() {
               ))}
             </div>
             <div className="rot-btns" style={{ marginTop: 8 }}>
-              <button className="arrow seg" onClick={() => s.rotate(-1)}>◀</button>
+              <button className="arrow seg" onClick={() => rotateAndNote(-1)}>◀</button>
               <div className="rot-num">{ROT_NAMES[s.rotation]}</div>
-              <button className="arrow seg" onClick={() => s.rotate(1)}>▶</button>
+              <button className="arrow seg" onClick={() => rotateAndNote(1)}>▶</button>
             </div>
             <p className="note">
               Zones: <b>2·3·4</b> front row · <b>1·6·5</b> back row — rotation advances clockwise after winning serve.
             </p>
+            {swapMsg && (
+              <p className="note" style={{ marginTop: 6, color: LIBERO_COLOR }}>
+                Libero swaps: {swapMsg}
+              </p>
+            )}
             <div className="rot-mini">
               {lineup.map((p) => (
-                <span key={p.role} className={`rm-chip ${p.isSetter ? 'rm-set' : ''}`} title={`Z${p.zone} · ${p.isFrontRow ? 'front' : 'back'}`}>
-                  {p.role}<i>Z{p.zone}</i>
+                <span key={p.role} className={`rm-chip ${p.isSetter ? 'rm-set' : ''} ${p.role === 'L' ? 'rm-lib' : ''}`} title={`Z${p.zone} · ${p.isFrontRow ? 'front' : 'back'}${p.subbedFor ? ` · covers ${p.subbedFor}` : ''}`}>
+                  {p.role}{p.role === 'L' && p.subbedFor ? <i>⇄{p.subbedFor}</i> : <i>Z{p.zone}</i>}
                 </span>
               ))}
             </div>
+            {liberoCoverFor(lineup) && (
+              <p className="note" style={{ marginTop: 6 }}>
+                <span style={{ color: LIBERO_COLOR }}><b>L</b></span> covers <b>{liberoCoverFor(lineup)}</b> in the back row
+                {(() => {
+                  const nextR = ((s.rotation + 1) % 6 + 6) % 6
+                  const swap = liberoSwapBetween(lineup, buildLineup(s.system, nextR))
+                  return swap ? ` → next rotation: L ${swap}` : ''
+                })()}
+              </p>
+            )}
           </section>
 
           <section>
@@ -634,6 +668,48 @@ export function ControlPanel() {
       )}
 
       {/* ================================================================== */}
+      {/*  ROTATION TAB — all six rotations + the libero relay                */}
+      {/* ================================================================== */}
+      {tab === 'rotation' && (
+        <>
+          <section>
+            <h3>Rotation chart — {s.system}</h3>
+            <p className="note" style={{ marginBottom: 8 }}>
+              Click the arrows to advance the live court. The libero <b>only plays the back
+              row</b> — when the middle it covers rotates to the front row, the two swap.
+            </p>
+            <div className="rot-btns" style={{ marginBottom: 8 }}>
+              <button className="arrow seg" onClick={() => rotateAndNote(-1)}>◀</button>
+              <div className="rot-num">{ROT_NAMES[s.rotation]}</div>
+              <button className="arrow seg" onClick={() => rotateAndNote(1)}>▶</button>
+            </div>
+            {swapMsg && (
+              <p className="note" style={{ marginBottom: 8, color: LIBERO_COLOR }}>
+                Libero swaps: {swapMsg}
+              </p>
+            )}
+            <RotationChart />
+          </section>
+
+          <section>
+            <h3>Why the libero matters here</h3>
+            <div className="rule-card" style={{ marginTop: 8 }}>
+              <span className="rule-icon" style={{ color: LIBERO_COLOR }}>⇄</span>
+              <div>
+                <h3>Libero substitution</h3>
+                <p>
+                  The libero (distinct jersey, {LIBERO_COLOR}) can replace any back-row player —
+                  here the middle blocker. At the instant the covered middle crosses into the
+                  front row, the libero <b>swaps back out</b> so a legal 6-player front row
+                  stands at the net. The chart above marks exactly where that happens.
+                </p>
+              </div>
+            </div>
+          </section>
+        </>
+      )}
+
+      {/* ================================================================== */}
       {/*  SETTINGS TAB                                                      */}
       {/* ================================================================== */}
       {tab === 'options' && (
@@ -657,6 +733,10 @@ export function ControlPanel() {
           <div className="row">
             <label>Auto replay</label>
             <button className={`switch ${s.autoReplay ? 'on' : ''}`} onClick={s.toggleAutoReplay} />
+          </div>
+          <div className="row">
+            <label>Rotate after point (watch the libero swap)</label>
+            <button className={`switch ${s.autoRotate ? 'on' : ''}`} onClick={s.toggleAutoRotate} />
           </div>
           <div className="row">
             <label>Playback speed</label>

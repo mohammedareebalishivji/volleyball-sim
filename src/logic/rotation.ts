@@ -27,8 +27,10 @@ export function buildLineup(system: System, rotation: number): Player[] {
   let liberoUsed = false
   for (const p of result) {
     if ((p.role === 'MB1' || p.role === 'MB2') && BACK_ZONES.has(p.zone) && !liberoUsed) {
+      const covered = p.role
       p.role = 'L'
       p.isLiberoSub = true
+      p.subbedFor = covered
       p.label = 'L'
       liberoUsed = true
     }
@@ -54,6 +56,30 @@ export function activeSetter(system: System, lineup: Player[]): Player | undefin
 export function rotationLabel(system: System, rotation: number): string {
   const names = ['Rotation 1', 'Rotation 2', 'Rotation 3', 'Rotation 4', 'Rotation 5', 'Rotation 6']
   return `${names[rotation]} (${system})`
+}
+
+// Which middle blocker the libero currently covers (null when L is on the bench).
+export function liberoCoverFor(lineup: Player[]): string | null {
+  const l = lineup.find((p) => p.role === 'L')
+  return l?.subbedFor ?? null
+}
+
+// When the libero's covered middle rotates to the front row, the libero swaps
+// to the other middle blocker. Returns a description like 'MB2 ↔ MB1' when the
+// coverage changes between two rotations, otherwise null.
+export function liberoSwapBetween(prev: Player[], next: Player[]): string | null {
+  const a = liberoCoverFor(prev)
+  const b = liberoCoverFor(next)
+  if (!a || !b || a === b) return null
+  return `${a} ↔ ${b}`
+}
+
+// Libero coverage for every rotation of a system, e.g. [{rotation: 0, covers: 'MB2'}, ...].
+export function liberoCoverageTable(system: System): { rotation: number; covers: string | null }[] {
+  return [0, 1, 2, 3, 4, 5].map((rotation) => ({
+    rotation,
+    covers: liberoCoverFor(buildLineup(system, rotation)),
+  }))
 }
 
 // Role description for the 6-2 transition callout

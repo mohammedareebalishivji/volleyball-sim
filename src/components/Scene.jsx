@@ -48,7 +48,12 @@ export function Scene() {
       if (s.play.clock > end) {
         if (!scoredRef.current) {
           scoredRef.current = true
-          s.addScore('A')
+          // Award the point to the real winner from the plan outcome (ace, kill,
+          // block, serve-out, etc.) instead of always crediting Team A.
+          const outcome = s.receivePlan?.outcome || s.servePlan?.outcome || s.plan?.outcome
+          s.addScore(outcome ? outcome.winner : 'A')
+          // Optionally advance the rotation so the libero↔middle swap plays out.
+          if (s.autoRotate) s.rotate(1)
         }
         if (s.autoReplay) {
           s.play.clock = 0

@@ -778,6 +778,88 @@ select {
 .sf-step.sf-now b { color: var(--accent); }
 .sf-arrow { color: var(--muted); font-size: 11px; padding-left: 5px; }
 
+/* ---- Libero / rotation mini chip accent ---- */
+.rm-lib { background: rgba(15, 143, 118, 0.16); border-color: rgba(15, 143, 118, 0.55); color: #7fe0c9; }
+
+/* ---- Rotation chart (Rotation tab) ---- */
+.rot-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+@media (min-width: 720px) {
+  .rot-grid { grid-template-columns: repeat(6, 1fr); }
+}
+.rot-card {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--panel-border);
+  border-radius: 9px;
+  padding: 7px 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.rot-card.current {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent), 0 4px 14px rgba(0, 0, 0, 0.35);
+}
+.rot-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.rot-card.current .rot-card-head { color: var(--accent); }
+.rot-now {
+  background: var(--accent);
+  color: #10141c;
+  border-radius: 4px;
+  padding: 0 4px;
+  font-size: 8.5px;
+}
+.rot-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px; }
+.rot-cell {
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 5px;
+  font-size: 10px;
+  font-weight: 800;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+.rot-cell.set { background: rgba(255, 179, 0, 0.16); border-color: rgba(255, 179, 0, 0.45); color: #ffd97a; }
+.rot-cell.lib { background: rgba(15, 143, 118, 0.2); border-color: rgba(15, 143, 118, 0.6); color: #7fe0c9; }
+.rot-cell.front { border-top: 2px solid rgba(255, 255, 255, 0.25); }
+.rot-cover {
+  font-size: 9.5px;
+  font-weight: 700;
+  text-align: center;
+  padding-top: 2px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.1);
+  color: var(--muted);
+}
+.rot-swaps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 8px;
+}
+.rot-swap {
+  font-size: 10px;
+  font-weight: 700;
+  color: #7fe0c9;
+  background: rgba(15, 143, 118, 0.12);
+  border: 1px solid rgba(15, 143, 118, 0.4);
+  border-radius: 6px;
+  padding: 2px 7px;
+}
+
 @media (max-width: 900px) {
   .panel { width: 240px; }
   .legend { display: none; }

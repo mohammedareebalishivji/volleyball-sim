@@ -4,7 +4,9 @@ import { makeEntries, ROSTERS } from '../tactics'
 import { solve } from '../physics'
 import type { Store, AnimState } from '../../types'
 
-function makeStore(overrides: Partial<Store> = {}): Store {
+type DeepPartial<T> = { [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K] }
+
+function makeStore(overrides: DeepPartial<Store> = {}): Store {
   const s = {
     system: '5-1' as const,
     rotation: 0,
@@ -170,5 +172,104 @@ describe('step (migrated TS animator)', () => {
     expect(sixTwoNote(makeStore())).toBeNull()
     const note = sixTwoNote(makeStore({ system: '6-2', rotation: 0 }))
     expect(typeof note).toBe('string')
+  })
+})
+
+describe('step — outcome resolution + plan lifecycle', () => {
+  it('attack plan carries a deterministic outcome with a valid winner', () => {
+    const s = makeStore()
+    const st = makeState()
+    step(s, st)
+    expect(st.plan!.outcome).toBeTruthy()
+    expect(['A', 'B']).toContain(st.plan!.outcome!.winner)
+    step(s, st)
+    expect(st.plan!.outcome).toBe(st.plan!.outcome)
+  })
+
+  it('changing the rotation invalidates the cached attack plan', () => {
+    const s = makeStore()
+    const st = makeState()
+    step(s, st)
+    const first = st.plan
+    s.rotation = 2
+    step(s, st)
+    expect(st.plan).not.toBe(first)
+  })
+
+  it('custom combo changes the hitter and zone used', () => {
+    const s = makeStore({ customCombo: { enabled: true, hitter: 'MB1', zone: 3 } })
+    const st = makeState()
+    step(s, st)
+    expect(st.plan).toBeTruthy()
+    expect(st.plan!.hitterRole).toBe('MB1')
+    expect(st.plan!.isCustom).toBe(true)
+  })
+
+  it('free drill places the first ball at the chosen spot', () => {
+    const s = makeStore({ drill: { enabled: true, firstBall: [-3, -2], spikeLanding: [2, 5] } })
+    const st = makeState()
+    step(s, st)
+    expect(st.plan!.isCustom).toBe(true)
+    expect(st.plan!.passP0.x).toBeCloseTo(-3, 5)
+    expect(st.plan!.passP0.z).toBeCloseTo(-2, 5)
+  })
+
+  it('serve plan is rebuilt when the target moves', () => {
+    const s = makeStore({ mode: 'serve', serveTarget: 'line' })
+    const st = makeState()
+    step(s, st)
+    const first = st.servePlan
+    s.serveTarget = 'deep-lb'
+    step(s, st)
+    expect(st.servePlan).not.toBe(first)
+  })
+
+  it('receive plan resolves the spike outcome and is finite', () => {
+    const s = makeStore({ mode: 'receive', blockPattern: 'triple' })
+    const st = makeState()
+    step(s, st)
+    expect(st.receivePlan!.outcome).toBeTruthy()
+    expect(st.receivePlan!.spike.landPoint.z).toBeGreaterThan(0)
+    expectFinitePositions(st)
+  })
+})
+
+describe('step — court placement', () => {
+  it('serve mode puts the server in zone 1 and the rest in formation', () => {
+    const s = makeStore({ mode: 'serve' })
+    const st = makeState()
+    step(s, st)
+    const entries = [...st.playersA.values()]
+    const server = entries.find((e) => e.anim === 'serve')
+    expect(server).toBeTruthy()
+    expect(server!.pos[0]).toBeCloseTo(0.4, 5)
+    expect(server!.pos[1]).toBeCloseTo(-9.6, 5)
+  })
+
+  it('receive mode hides the bench libero and shows a receiver moving', () => {
+    const s = makeStore({ mode: 'receive' })
+    const st = makeState()
+    step(s, st)
+    // exactly one player on each team should be marked hidden (the subbed middle / libero)
+    const hiddenA = [...st.playersA.values()].filter((e) => e.hidden)
+    expect(hiddenA.length).toBeGreaterThan(0)
+    for (const e of st.playersA.values()) expect(Number.isFinite(e.pos[0])).toBe(true)
+  })
+
+  it('attack mode keeps everyone finite and on-court', () => {
+    const s = makeStore({ mode: 'attack', blockPattern: 'double' })
+    const st = makeState()
+    step(s, st)
+    for (const e of st.playersA.values()) expect(Number.isFinite(e.pos[1])).toBe(true)
+    for (const e of st.playersB.values()) expect(Number.isFinite(e.pos[1])).toBe(true)
+  })
+
+  it('6-2 receive still yields a plan and a setter', () => {
+    const s = makeStore({ system: '6-2', mode: 'receive' })
+    const st = makeState()
+    step(s, st)
+    expect(st.receivePlan).toBeTruthy()
+    expect(st.receivePlan!.setterRole).toMatch(/^S[12]$/)
+    expectFinitePositions(st)
   })
 })

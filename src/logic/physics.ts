@@ -281,8 +281,12 @@ export function planServeReceive(opts: PlanOptions): ReceivePlan {
   const passHold = 0.12
   const passRelease = serveLandAt + passHold
   const passApex = 3.4
-  const passFlight = (2 * (passApex - passP0.y)) / GRAVITY + Math.sqrt((2 * (passApex - setHands.y)) / GRAVITY)
-  const passV = velocityToArc(passP0, setHands, passApex).v
+  // Use the same trajectory the solver computes so the ball really lands in the
+  // setter's hands at `passFlight` (the old formula used a different rise time
+  // and undershot the setter).
+  const passArc = velocityToArc(passP0, setHands, passApex)
+  const passFlight = passArc.t
+  const passV = passArc.v
   const passLandAt = passRelease + passFlight
 
   // Set

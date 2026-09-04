@@ -95,7 +95,7 @@ export function PlayerActor({ data, jerseyColor }) {
 
   return (
     <group ref={root} visible={!data || !data.hidden}>
-      <Humanoid position={[0, 0, 0]} pose={pose} jerseyColor={jerseyColor} isLibero={data && data.role === 'L'} number={data.label} />
+      <Humanoid position={[0, 0, 0]} pose={pose} jerseyColor={jerseyColor} isLibero={data && data.role === 'L'} number={data.label} role={data.role} />
       {labelsVisible && data && !data.hidden && (
         <sprite position={[0, 2.35, 0]} scale={[0.85, 0.21, 0.85]}>
           <spriteMaterial map={labelTex} transparent depthWrite={false} />

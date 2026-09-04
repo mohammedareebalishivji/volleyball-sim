@@ -63,6 +63,8 @@ export interface Player {
   role: string
   zone: number
   isLiberoSub?: boolean
+  // When the libero is subbed in, this records the role it replaced (e.g. 'MB2').
+  subbedFor?: string
   label: string
   isSetter: boolean
   isFrontRow: boolean
@@ -256,6 +258,7 @@ export interface Store {
   play: { clock: number }
   speed: number
   autoReplay: boolean
+  autoRotate: boolean
   signalId: number
   realisticTiming: boolean
   plan: AttackPlan | null
@@ -297,6 +300,7 @@ export interface Store {
   toggleRealistic: () => void
   setSpeed: (speed: number) => void
   toggleAutoReplay: () => void
+  toggleAutoRotate: () => void
   setPlan: (plan: AttackPlan | null) => void
   setServePlan: (servePlan: ServePlan | null) => void
   setReceivePlan: (receivePlan: ReceivePlan | null) => void
